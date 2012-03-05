@@ -131,6 +131,13 @@ bcm2835_spi_clrbits(struct bcm2835_spi *bcm2835_spi, u32 reg, u32 mask)
 	iowrite32(val, reg_addr);
 }
 
+static inline void
+bcm2835_spi_writeReg(struct bcm2835_spi *bcm2835_spi, u32 reg, u32 val)
+{
+	void __iomem *reg_addr = spi_reg(bcm2835_spi, reg);
+	iowrite32(val, reg_addr);
+	printk("bcm2835_spi wrote  0x%02lX to 0x%02lX \n", val, reg_addr);
+}
 
 
 
@@ -139,9 +146,9 @@ bcm2835_spi_clrbits(struct bcm2835_spi *bcm2835_spi, u32 reg, u32 mask)
 static int bcm2835_spi_set_transfer_size(struct bcm2835_spi *bcm2835_spi, int size)
 {//TODO
 	if (size == 16) {
-		//orion_spi_setbits(orion_spi, ORION_SPI_IF_CONFIG_REG,				  ORION_SPI_IF_8_16_BIT_MODE);
+		//bcm2835_spi_setbits(bcm2835_spi, XXX, XXX);
 	} else if (size == 8) {
-		//orion_spi_clrbits(orion_spi, ORION_SPI_IF_CONFIG_REG,				  ORION_SPI_IF_8_16_BIT_MODE);
+		//bcm2835_spi_setbits(bcm2835_spi, XXX, XXX);
 	} else {
 		pr_debug("Bad bits per word value %d (only 8 or 16 are "
 			 "allowed).\n", size);
@@ -153,7 +160,11 @@ static int bcm2835_spi_set_transfer_size(struct bcm2835_spi *bcm2835_spi, int si
 
 static int bcm2835_spi_baudrate_set(struct spi_device *spi, unsigned int speed)
 {
-//TODO
+	struct bcm2835_spi *bcm2835_spi;
+	bcm2835_spi = spi_master_get_devdata(spi->master);
+
+//TODO -- this is hard coded in to devide 250Mhz system clock to give 1Mhz SPI clk
+	bcm2835_spi_writeReg(bcm2835_spi,SPI0_CLKSPEED, 250);
 	return 0;
 }
 
@@ -165,6 +176,7 @@ static int bcm2835_spi_baudrate_set(struct spi_device *spi, unsigned int speed)
 static int
 bcm2835_spi_setup_transfer(struct spi_device *spi, struct spi_transfer *t)
 {
+	printk("in bcm2835_spi_setup_transfer\n");
 	struct bcm2835_spi *bcm2835_spi;
 	unsigned int speed = spi->max_speed_hz;
 	unsigned int bits_per_word = spi->bits_per_word;
@@ -316,6 +328,8 @@ static void bcm2835_spi_work(struct work_struct *work)
 	struct bcm2835_spi *bcm2835_spi =
 		container_of(work, struct bcm2835_spi, work);
 
+	printk("in bcm2835_spi_work\n");
+
 	spin_lock_irq(&bcm2835_spi->lock);
 	while (!list_empty(&bcm2835_spi->msg_queue)) {
 		struct spi_message *m;
@@ -402,6 +416,8 @@ static int bcm2835_spi_setup(struct spi_device *spi)
 	//TODO customise
 	struct bcm2835_spi *bcm2835_spi;
 
+	printk("in bcm2835_spi_setup\n");
+
 	bcm2835_spi = spi_master_get_devdata(spi->master);
 
 	/* Fix ac timing if required.   */
@@ -435,6 +451,8 @@ static int bcm2835_spi_transfer(struct spi_device *spi, struct spi_message *m)
 
 	m->actual_length = 0;
 	m->status = 0;
+
+	printk("in bcm2835_spi_transfer\n");
 
 	/* reject invalid messages and transfers */
 	if (list_empty(&m->transfers) || !m->complete)
@@ -504,6 +522,8 @@ static int __init bcm2835_spi_probe(struct platform_device *pdev)
 	struct resource *r;
 	struct bcm2835_spi_info *spi_info;
 	int status = 0;
+
+	printk("in bcm2835_spi_probe\n");
 
 	spi_info = pdev->dev.platform_data;
 
@@ -614,6 +634,7 @@ static struct platform_driver bcm2835_spi_driver = {
 
 static int __init bcm2835_spi_init(void)
 {
+	printk("in spi_init driver\n");
 	bcm2835_spi_wq = create_singlethread_workqueue(
 				bcm2835_spi_driver.driver.name);
 

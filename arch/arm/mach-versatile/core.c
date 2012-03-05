@@ -37,6 +37,10 @@
 #include <linux/clkdev.h>
 #include <linux/mtd/physmap.h>
 
+
+#include <linux/spi/spi.h>
+#include <linux/spi/bcm2835_spi.h>
+
 #include <asm/system.h>
 #include <asm/irq.h>
 #include <asm/leds.h>
@@ -284,6 +288,105 @@ static int __init versatile_i2c_init(void)
 				       ARRAY_SIZE(versatile_i2c_board_info));
 }
 arch_initcall(versatile_i2c_init);
+
+/*****************************************************************************
+ * SPI
+ ****************************************************************************/
+
+/* Fill in the resources structure and link it into the platform
+   device structure. There is always a memory region, and nearly
+   always an interrupt.*/
+static void fill_resources(struct platform_device *device,
+			   struct resource *resources,
+			   resource_size_t mapbase,
+			   resource_size_t size,
+			   unsigned int irq)
+{
+	device->resource = resources;
+	device->num_resources = 1;
+	resources[0].flags = IORESOURCE_MEM;
+	resources[0].start = mapbase;
+	resources[0].end = mapbase + size;
+
+	if (irq != NO_IRQ) {
+		device->num_resources++;
+		resources[1].flags = IORESOURCE_IRQ;
+		resources[1].start = irq;
+		resources[1].end = irq;
+	}
+}
+
+#define BCM2708_PERI_BASE        0x20000000
+#define SPI0_BASE                (BCM2708_PERI_BASE + 0x204000) /* SPI0 controller */
+
+static struct bcm2835_spi_info bcm2835_spi_plat_data;
+static struct resource bcm2835_spi_resources;
+
+static struct platform_device bcm2835_spi = {
+	.name		= "bcm2835_spi",
+	.id		= 0,
+	.dev		= {
+		.platform_data	= &bcm2835_spi_plat_data,
+	},
+};
+
+
+/* Note: The SPI silicon core does have interrupts. However the
+ * current Linux software driver does not use interrupts. */
+
+void __init _spi_init(unsigned long mapbase,
+			   unsigned long tclk)
+{
+	bcm2835_spi_plat_data.tclk = tclk;
+	fill_resources(&bcm2835_spi, &bcm2835_spi_resources,
+		       mapbase, SZ_512 - 1, NO_IRQ);
+
+	printk("calling _platform_device_reg\n");
+	platform_device_register(&bcm2835_spi);
+}
+
+
+static struct spi_board_info bcm2835_spidev = {
+  //      {
+                .modalias       = "spidev",
+                .chip_select    = 0,
+                .max_speed_hz   = 1 * 1000 * 1000,
+                .bus_num        = 0,
+    //    }, 
+};
+
+
+
+/* --------------------------------------------------------------------
+ *  SPI
+ * -------------------------------------------------------------------- */
+/*
+#if defined(CONFIG_SPI_ATMEL) || defined(CONFIG_SPI_ATMEL_MODULE)
+static u64 spi_dmamask = DMA_BIT_MASK(32);
+
+static struct resource spi0_resources[] = {
+	[0] = {
+		.start	= AT91CAP9_BASE_SPI0,
+		.end	= AT91CAP9_BASE_SPI0 + SZ_16K - 1,
+		.flags	= IORESOURCE_MEM,
+	},
+	[1] = {
+		.start	= AT91CAP9_ID_SPI0,
+		.end	= AT91CAP9_ID_SPI0,
+		.flags	= IORESOURCE_IRQ,
+	},
+};
+
+static struct platform_device at91cap9_spi0_device = {
+	.name		= "atmel_spi",
+	.id		= 0,
+	.dev		= {
+				.dma_mask		= &spi_dmamask,
+				.coherent_dma_mask	= DMA_BIT_MASK(32),
+	},
+	.resource	= spi0_resources,
+	.num_resources	= ARRAY_SIZE(spi0_resources),
+};*/
 
 #define VERSATILE_SYSMCI	(__io_address(VERSATILE_SYS_BASE) + VERSATILE_SYS_MCI_OFFSET)
 
@@ -769,6 +872,11 @@ void __init versatile_init(void)
 		struct amba_device *d = amba_devs[i];
 		amba_device_register(d, &iomem_resource);
 	}
+
+	_spi_init(SPI0_BASE,2000);
+//	platform_add_devices(bcm2835_spi_devices, ARRAY_SIZE(bcm2835_spi_devices));
+	spi_register_board_info(&bcm2835_spidev,1);
+//	platform_device_register(&);
 
 #ifdef CONFIG_LEDS
 	leds_event = versatile_leds_event;
