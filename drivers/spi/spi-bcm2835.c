@@ -145,16 +145,12 @@ bcm2835_spi_writeReg(struct bcm2835_spi *bcm2835_spi, u32 reg, u32 val)
 
 static int bcm2835_spi_set_transfer_size(struct bcm2835_spi *bcm2835_spi, int size)
 {//TODO
-	if (size == 16) {
-		//bcm2835_spi_setbits(bcm2835_spi, XXX, XXX);
-	} else if (size == 8) {
-		//bcm2835_spi_setbits(bcm2835_spi, XXX, XXX);
-	} else {
-		pr_debug("Bad bits per word value %d (only 8 or 16 are "
+	if (size != 8)
+	{
+		pr_debug("Bad bits per word value %d (only 8 bits are supported "
 			 "allowed).\n", size);
 		return -EINVAL;
 	}
-
 	return 0;
 }
 
@@ -163,7 +159,7 @@ static int bcm2835_spi_baudrate_set(struct spi_device *spi, unsigned int speed)
 	struct bcm2835_spi *bcm2835_spi;
 	bcm2835_spi = spi_master_get_devdata(spi->master);
 
-//TODO -- this is hard coded in to devide 250Mhz system clock to give 1Mhz SPI clk
+//TODO -- this is hard coded in to divide 250Mhz system clock to give 1Mhz SPI clk
 	bcm2835_spi_writeReg(bcm2835_spi,SPI0_CLKSPEED, 250);
 	return 0;
 }
@@ -176,6 +172,11 @@ static int bcm2835_spi_baudrate_set(struct spi_device *spi, unsigned int speed)
 static int
 bcm2835_spi_setup_transfer(struct spi_device *spi, struct spi_transfer *t)
 {
+	//TODO setup clock phase, clock polarity
+
+	//TODO maybe set up chip select and chip select polarity
+	//TODO maybe setup TA
+
 	printk("in bcm2835_spi_setup_transfer\n");
 	struct bcm2835_spi *bcm2835_spi;
 	unsigned int speed = spi->max_speed_hz;
@@ -227,31 +228,33 @@ static inline int
 bcm2835_spi_write_read_8bit(struct spi_device *spi,
 			  const u8 **tx_buf, u8 **rx_buf)
 {
-/*	void __iomem *tx_reg, *rx_reg, *int_reg;
+	void __iomem *tx_reg, *rx_reg, *int_reg;
 	struct bcm2835_spi *bcm2835_spi;
 
 	bcm2835_spi = spi_master_get_devdata(spi->master);
-	tx_reg = spi_reg(bcm2835_spi, ORION_SPI_DATA_OUT_REG);
-	rx_reg = spi_reg(bcm2835_spi, ORION_SPI_DATA_IN_REG);
-	int_reg = spi_reg(bcm2835_spi, ORION_SPI_INT_CAUSE_REG);
+	tx_reg = spi_reg(bcm2835_spi, SPI0_FIFO);
+	rx_reg = spi_reg(bcm2835_spi, SPI0_FIFO);
+	//int_reg = spi_reg(bcm2835_spi, ORION_SPI_INT_CAUSE_REG);
 
 	/* clear the interrupt cause register 
 	writel(0x0, int_reg);
+*/
 
+	//here we write one byte. This only works if DMAEN is clear and TA is set)
 	if (tx_buf && *tx_buf)
-		writel(*(*tx_buf)++, tx_reg);
+		iowrite8(*(*tx_buf)++, tx_reg);
 	else
-		writel(0, tx_reg);
+		iowrite8(0, tx_reg);
 
 	if (bcm2835_spi_wait_till_ready(bcm2835_spi) < 0) {
 		dev_err(&spi->dev, "TXS timed out\n");
 		return -1;
 	}
-
+	//here we read one byte. This only works if DMAEN is clear and TA is set)
 	if (rx_buf && *rx_buf)
-		*(*rx_buf)++ = readl(rx_reg);
+		*(*rx_buf)++ = ioread8(rx_reg);
 
-	return 1;*/
+	return 1;
 }
 
 static inline int
@@ -307,7 +310,7 @@ bcm2835_spi_write_read(struct spi_device *spi, struct spi_transfer *xfer)
 				goto out;
 			count--;
 		} while (count);
-	} else if (word_len == 16) {
+	} /*else if (word_len == 16) {
 		const u16 *tx = xfer->tx_buf;
 		u16 *rx = xfer->rx_buf;
 
@@ -316,7 +319,7 @@ bcm2835_spi_write_read(struct spi_device *spi, struct spi_transfer *xfer)
 				goto out;
 			count -= 2;
 		} while (count);
-	}
+	}*/
 
 out:
 	return xfer->len - count;
@@ -362,7 +365,7 @@ static void bcm2835_spi_work(struct work_struct *work)
 				if (!t->speed_hz && !t->bits_per_word)
 					par_override = 0;
 			}
-
+			//TODO set transfer active
 			if (!cs_active) {
 				bcm2835_spi_set_cs(bcm2835_spi, 1);
 				cs_active = 1;
@@ -375,6 +378,7 @@ static void bcm2835_spi_work(struct work_struct *work)
 			if (t->delay_usecs)
 				udelay(t->delay_usecs);
 
+			//TODO set transfer inactive
 			if (t->cs_change) {
 				bcm2835_spi_set_cs(bcm2835_spi, 0);
 				cs_active = 0;
@@ -397,17 +401,21 @@ msg_done:
 static int __init bcm2835_spi_reset(struct bcm2835_spi *bcm2835_spi)
 {
 	/* Verify that the CS is deasserted */
-	bcm2835_spi_set_cs(bcm2835_spi, 0);
+	//bcm2835_spi_set_cs(bcm2835_spi, 0);
 
-// Want to have 1 MHz SPI clock.
-  // Divide 250MHz system clock by 250
-  //SPI0_CLKSPEED = 250;
+		
+	//struct bcm2835_spi *bcm2835_spi;
+
+	//bcm2835_spi = spi_master_get_devdata(spi->master);
+
+	//TODO clr all the other registers
+
+	//clear FIFOs (one shot op)
+	bcm2835_spi_setbits(bcm2835_spi,SPI0_CNTLSTAT,SPI0_CS_CLRTXFIFO|SPI0_CS_CLRRXFIFO);
+
+	//TODO datasheet says this is RO, but example code clrs it
+	bcm2835_spi_clrbits(bcm2835_spi,SPI0_CNTLSTAT,SPI0_CS_DONE);
  
-  // clear FIFOs and all status bits
-  //SPI0_CNTLSTAT = SPI0_CS_CLRALL;
- // SPI0_CNTLSTAT = SPI0_CS_DONE; // make sure done bit is cleared
-
-
 	return 0;
 }
 
@@ -473,7 +481,7 @@ static int bcm2835_spi_transfer(struct spi_device *spi, struct spi_message *m)
 		if (t->bits_per_word)
 			bits_per_word = t->bits_per_word;
 
-		if ((bits_per_word != 8) && (bits_per_word != 16)) {
+		if ((bits_per_word != 8) /*&& (bits_per_word != 16)*/) {
 			dev_err(&spi->dev,
 				"message rejected : "
 				"invalid transfer bits_per_word (%d bits)\n",
@@ -481,13 +489,13 @@ static int bcm2835_spi_transfer(struct spi_device *spi, struct spi_message *m)
 			goto msg_rejected;
 		}
 		/*make sure buffer length is even when working in 16 bit mode*/
-		if ((t->bits_per_word == 16) && (t->len & 1)) {
+/*		if ((t->bits_per_word == 16) && (t->len & 1)) {
 			dev_err(&spi->dev,
 				"message rejected : "
 				"odd data length (%d) while in 16 bit mode\n",
 				t->len);
 			goto msg_rejected;
-		}
+		}*/
 
 		if (t->speed_hz && t->speed_hz < bcm2835_spi->min_speed) {
 			dev_err(&spi->dev,
